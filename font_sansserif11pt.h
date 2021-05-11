@@ -2260,7 +2260,6 @@ const TFontCharInfo sansserif_11ptDescriptors[] =
     {7, 1654}, 		/* ż \221*/
 };
 
-
 /* Font information for Sans Serif 11pt */
 const TFont sansserif_11pt =
 {
@@ -2268,7 +2267,6 @@ const TFont sansserif_11pt =
 	1, /* space */
 	' ', /*  Start character */
 	'}'+20, /*  End character + "~" + DEL i 18 polskich znakow*/
-    //'}'+20, /*  End character + "~" + DEL i 18 polskich znakow*/
 	sansserif_11ptDescriptors, /*  Character descriptor array */
 	sansserif_11ptBitmaps, /*  Character bitmap array */
 };

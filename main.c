@@ -2,13 +2,54 @@
 #include "libbmp.h"
 #include <stdint.h>
 //#include <inttypes.h.>
+#include <time.h>
 
 #include <string.h>
 #include "dispbuf.h"
 #include "font_mono5x8.h"
-#include "font_comicsans10pt.h"
-#include "font_consolas12pt.h"
+#include "symbols8pt.h"
 #include "font_sansserif11pt.h"
+#include "bitmaps.h"
+
+
+#define VLINE_X 90
+#define HLINE_Y 46
+
+#define LANG_PL
+
+#ifdef LANG_PL
+#define MSG_CREEP		"Czekam..."
+#define MSG_PUMPING		"Pompowanie"
+#define MSG_MEASURE		"Pomiar"
+#define MSG_TIME_TO_END "DO KONCA"
+#define MSG_P_ROUGH 	"SR"
+#define MSG_P_FINE 		"SF"
+#define MSG_PRESS_KEY1 	"Btn1 - Exit"
+#define MSG_PRESS_KEY2 	"Btn2 - Monitor"
+#define MSG_P_START 	"Start"
+#define MSG_P_HALF 		"Polowa"
+#define MSG_P_END 		"Stop"
+#define MSG_F1START		"F1 - test"
+#define MSG_F1MONITOR	"F2 - kontrola"
+#define MSG_DUMP		"Czekam..."
+#define MSG_READY		"Gotowy"
+#define MSG_RFID_SCAN	"Skanuj"
+#define MSG_DEVICE		"urzadzenie"
+#define MSG_USER		"uzytkownik"
+#define MSG_CANCEL		"F1 - przerwij"
+#define MSG_SKIP		"F2 - pomin"
+#define MSG_MONITOR  	"Kontrola"
+#define MSG_RESULT_BAD  	"Nieszczelny"
+#define MSG_RESULT_GOOD 	"Szczelny"
+#define MSG_RESULT_NOTRELIABLE 	"Niepewny"
+#define MSG_RESULT_CANCELED "Przerwany"
+#define MSG_RESULT_MONITOR  "Kontrola"
+#define MSG_RESULT_ERROR  	"B\214\211d"
+#define MSG_OKFINISH	"OK - koniec"
+#define MSG_ERROR_SERVICE	"Konieczny serwis!"
+#define MSG_ERROR_CODE	"Kod:"
+#define MSG_DATE_TIME	"Data i godzina"
+#endif
 
 TDisplayBuffer display_buffer;
 
@@ -148,6 +189,393 @@ uint8_t st7565_buffer[1024] = {
 void bmp_put_mono_pixel(bmp_img *img, int x, int y, uint8_t color);
 char str[1000];
 
+
+void clearDisplay(void) {
+	char _text[20];
+	uint16_t mV;
+	time_t now;
+	struct tm  *ts;
+
+	dbuf_Fill(&display_buffer, 0);
+	dbuf_DrawLine(&display_buffer, VLINE_X, HLINE_Y, VLINE_X, 63, 1);
+	dbuf_DrawLine(&display_buffer, 0, HLINE_Y, 127, HLINE_Y, 1);
+
+	now = 1589188754;//read_rtc(&hrtc);
+	ts = gmtime(&now);
+	//strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ts);
+	strftime(_text, sizeof(_text), "%H:%M", ts);
+	dbuf_PutString(&display_buffer, 0, HLINE_Y + 2, (uint8_t*)_text, &mono5x8, 1);
+	strftime(_text, sizeof(_text), "%d/%m/%Y", ts);
+	dbuf_PutString(&display_buffer, 0, HLINE_Y + 10, (uint8_t*)_text, &mono5x8, 1);
+
+
+	//dbuf_PutString(&display_buffer, 0, HLINE_Y + 2, (uint8_t*)buf, &mono5x8, 1);
+
+
+	//mV = (lion_adc * 33297) / 4095);
+	//mV = (lion_adc * 33297) / batt_divisor;
+	sprintf((char*) _text, "%c %c", 3 + 128, 133);
+	//printf(_text);
+	//sprintf((char*) _text, "%c %c", mv2batlvl(mV) + 128, 132);
+	dbuf_PutString(&display_buffer, VLINE_X - 23, HLINE_Y + 10, (uint8_t*)_text, &symbols8pt, 1);
+}
+
+
+void stReadyRefreshDisplay(void) {
+	clearDisplay();
+	dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_READY, &sansserif_11pt, 1);
+	dbuf_PutString(&display_buffer, 0, 18, (uint8_t*)MSG_F1START, &mono5x8, 1);
+	dbuf_PutString(&display_buffer, 0, 27, (uint8_t*)MSG_F1MONITOR, &mono5x8, 1);
+	//st7565_WriteBuffer(display_buffer.buffer);
+}
+
+void stRFIDScanRefreshDisplay(void) {
+	clearDisplay();
+	dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_RFID_SCAN, &sansserif_11pt, 1);
+	//switch (scan_mode) {
+	//case SCAN_MODE_USER:
+		//dbuf_PutString(&display_buffer, 0, 17, (uint8_t*)MSG_USER, &mono5x8, 1);
+	//	break;
+	//case SCAN_MODE_DEVICE:
+		dbuf_PutString(&display_buffer, 0, 17, (uint8_t*)MSG_DEVICE, &mono5x8, 1);
+	//	break;
+	//}
+	dbuf_PutString(&display_buffer, 0, 29, (uint8_t*)MSG_CANCEL, &mono5x8, 1);
+	dbuf_PutString(&display_buffer, 0, 38, (uint8_t*)MSG_SKIP, &mono5x8, 1);
+
+	//st7565_WriteBuffer(display_buffer.buffer);
+}
+
+void stPumpingRefreshDisplay(void) {
+	uint8_t _text[20] = { 0 };
+	uint16_t _elapsed_time;
+	int32_t _pressure;
+
+	clearDisplay();
+	dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_PUMPING, &sansserif_11pt, 1);
+	// display iteration number
+//	sprintf((char*) _text, "%d/%d", test_log.cycle_iter + 1, CYCLE_N);
+	sprintf((char*) _text, "%d/%d", 1, 4);
+	dbuf_PutString(&display_buffer, 95, 0, _text, &mono5x8, 1);
+	// display elapsed time
+//	_elapsed_time = (HAL_GetTick() - timer) / 1000;
+	_elapsed_time = 15;
+	sprintf((char*) _text, "%ds", _elapsed_time);
+	dbuf_PutString(&display_buffer, 0, HLINE_Y - 9, _text, &mono5x8, 1);
+	// display CANCEL info
+	dbuf_PutString(&display_buffer, 0, 18, (uint8_t*)MSG_CANCEL, &mono5x8, 1);
+	// display rough pressure
+//	_pressure = pressureRough / 10;
+	_pressure = 1572;
+	if (_pressure < 50)
+		_pressure = 0;
+	sprintf((char*) _text, "%d.%02d", (int16_t) (_pressure / 100),
+			(int16_t) (_pressure % 100));
+	dbuf_PutString(&display_buffer, VLINE_X + 2, HLINE_Y + 2, _text,
+			&sansserif_11pt, 1);
+	//st7565_WriteBuffer(display_buffer.buffer);
+}
+
+void stCreepRefreshDisplay(void) {
+	int32_t _pressure;
+	uint8_t _text[20];
+	uint16_t _remaining_time;
+
+//	if (curState->init == siInit) {
+//		return;
+//	}
+	clearDisplay();
+	dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_CREEP, &sansserif_11pt, 1);
+	// display iteration number
+//	sprintf((char*) _text, "%d/%d", test_log.cycle_iter + 1, CYCLE_N);
+	sprintf((char*) _text, "%d/%d", 1, 4);
+	dbuf_PutString(&display_buffer, 95, 0, _text, &mono5x8, 1);
+	// display remaining time
+//	if (test_log.cycle_iter == 0) {
+//		_remaining_time = (CREEP_DURATION + timer - HAL_GetTick())
+//				/ 1000;
+//	} else {
+//		_remaining_time = (CYCLE_CREEP_TIME + timer - HAL_GetTick()) / 1000;
+//	}
+//	sprintf((char*) _text, "%ds", _remaining_time);
+	sprintf((char*) _text, "%ds", 5);
+	dbuf_PutString(&display_buffer, 0, HLINE_Y - 9, _text, &mono5x8, 1);
+	// display CANCEL info
+	dbuf_PutString(&display_buffer, 0, 18, (uint8_t*)MSG_CANCEL, &mono5x8, 1);
+	// display rough pressure
+//	_pressure = pressureRough / 10;
+	_pressure = 1954;
+	if (_pressure < 50)
+		_pressure = 0;
+	sprintf((char*) _text, "%d.%02d", (int16_t) (_pressure / 100),
+			(int16_t) (_pressure % 100));
+	dbuf_PutString(&display_buffer, VLINE_X + 2, HLINE_Y + 2, _text,
+			&sansserif_11pt, 1);
+//	st7565_WriteBuffer(display_buffer.buffer);
+}
+
+void stMeasureRefreshDisplay(void) {
+	uint16_t _remaining_time;
+	uint8_t _text[20] = { 0 };
+	int32_t _pressure;
+
+//	if (curState->init == siNone) {
+		clearDisplay();
+		dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_MEASURE, &sansserif_11pt, 1);
+		// display iteration number
+//		sprintf((char*) _text, "%d/%d", test_log.cycle_iter + 1, CYCLE_N);
+		sprintf((char*) _text, "%d/%d", 3, 4);
+		dbuf_PutString(&display_buffer, 95, 0, _text, &mono5x8, 1);
+		// display CANCEL info
+		dbuf_PutString(&display_buffer, 0, 18, (uint8_t*)MSG_CANCEL, &mono5x8, 1);
+		// display remaining time
+//		_remaining_time = (CYCLE_MEASURE_TIME + timer - HAL_GetTick()) / 1000;
+		_remaining_time = 19;
+		sprintf((char*) _text, "%3ds", _remaining_time);
+		dbuf_PutString(&display_buffer, 0, HLINE_Y - 9, _text, &mono5x8, 1);
+		// dispaly fine pressure
+//		sprintf((char*) _text, "Fine: %dPa", (int16_t) (pressureFine / 10));
+		sprintf((char*) _text, "Delta: %dPa", 23);
+		dbuf_PutString(&display_buffer, 0, HLINE_Y - 18, _text, &mono5x8, 1);
+		// display rought pressure
+//		_pressure = pressureRough / 10;
+		if (_pressure < 50)
+			_pressure = 0;
+		sprintf((char*) _text, "%d.%02d", (int16_t) (_pressure / 100),
+				(int16_t) (_pressure % 100));
+		dbuf_PutString(&display_buffer, VLINE_X + 2, HLINE_Y + 2, _text,
+				&sansserif_11pt, 1);
+
+		//st7565_WriteBuffer(display_buffer.buffer);
+//	}
+}
+
+void stDumpRefreshDisplay(void) {
+	uint8_t _text[20];
+	int32_t _pressure;
+
+//	if (curState->init == siNone) {
+		clearDisplay();
+		dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_DUMP, &sansserif_11pt, 1);
+		// wyswietl aktualna wartosc zgrubna
+//		_pressure = pressureRough / 10;
+		_pressure = 105;
+		if (_pressure < 50)
+			_pressure = 0;
+		sprintf((char*) _text, "%d.%02d", (int16_t) (_pressure / 100),
+				(int16_t) (_pressure % 100));
+		dbuf_PutString(&display_buffer, VLINE_X + 2, HLINE_Y + 2, _text,
+				&sansserif_11pt, 1);
+//	}
+//	st7565_WriteBuffer(display_buffer.buffer);
+}
+
+void stMonitorRefreshDisplay(void) {
+	int32_t _pressure;
+	uint16_t _elapTime, m, s;
+	uint8_t _text[20];
+
+//	if (curState->init == siInit) {
+//		return;
+//	}
+	clearDisplay();
+//	_elapTime = (uint16_t) ((HAL_GetTick() - timer) / 1000);
+	_elapTime = 289;
+	m = _elapTime / 60;
+	s = _elapTime % 60;
+	dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_MONITOR, &sansserif_11pt, 1);
+	dbuf_PutString(&display_buffer, 0, 18, (uint8_t*)MSG_CANCEL, &mono5x8, 1);
+	sprintf((char*) _text, "%d:%02d", m, s);
+	dbuf_PutString(&display_buffer, 0, HLINE_Y - 9, _text, &mono5x8, 1);
+
+	// wyswietl aktualna wartosc zgrubna
+//	_pressure = pressureRough / 10;
+	_pressure = 2362;
+	if (_pressure < 50)
+		_pressure = 0;
+	sprintf((char*) _text, "%d.%02d", (int16_t) (_pressure / 100),
+			(int16_t) (_pressure % 100));
+	dbuf_PutString(&display_buffer, VLINE_X + 2, HLINE_Y + 2, _text,
+			&sansserif_11pt, 1);
+
+//	st7565_WriteBuffer(display_buffer.buffer);
+}
+
+typedef enum {
+	jrNone = 1,
+	jrGood,
+	jrBad,
+	jrMonitor,
+	jrCanceled,
+	jrError,
+	jrNotReliable
+} JobResultTypeDef;
+
+typedef enum {
+	ecThresholdExceeded = 0xB010,
+	ecPumpingTooLong = 0xB011,
+	ecPumpingTooShort = 0xB012,
+} testerErrorCodeTypeDef;
+
+JobResultTypeDef job_result = jrNotReliable;
+testerErrorCodeTypeDef errorCode = ecPumpingTooShort;
+
+void stHoldRefreshDisplay(void) {
+	uint8_t _text[30] = { 0 };
+	int32_t _pressure;
+
+	clearDisplay();
+
+	// wyswietl aktualna wartosc zgrubna
+//	_pressure = pressureRough / 10;
+	_pressure = 2517;
+	if (_pressure < 50)
+		_pressure = 0;
+	sprintf((char*) _text, "%d.%02d", (int16_t) (_pressure / 100),
+			(int16_t) (_pressure % 100));
+	dbuf_PutString(&display_buffer, VLINE_X + 2, HLINE_Y + 2, _text,
+			&sansserif_11pt, 1);
+
+	dbuf_PutString(&display_buffer, 0, HLINE_Y - 8, (uint8_t*)MSG_OKFINISH, &mono5x8, 1);
+
+	switch (job_result) {
+	case jrBad:
+//		set_backlight(bcRed);
+		dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_RESULT_BAD, &sansserif_11pt,
+				1);
+		dbuf_PutString(&display_buffer, 0, HLINE_Y - 8, (uint8_t*)MSG_OKFINISH, &mono5x8,
+				1);
+		break;
+	case jrCanceled:
+		dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_RESULT_CANCELED,
+				&sansserif_11pt, 1);
+		break;
+	case jrError:
+		dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_RESULT_ERROR, &sansserif_11pt,
+				1);
+		sprintf(_text, "%04X", errorCode);
+			dbuf_PutString(&display_buffer, 0, 15,
+					(uint8_t*) _text, &mono5x8, 1);
+		switch (errorCode) {
+		case ecThresholdExceeded:
+			dbuf_PutString(&display_buffer, 0, 24,
+					(uint8_t*) "Uwaga cisnienie", &mono5x8, 1);
+			break;
+		case ecPumpingTooLong:
+			dbuf_PutString(&display_buffer, 0, 24,
+					(uint8_t*) "Pompowanie nieudane", &mono5x8, 1);
+			break;
+		case ecPumpingTooShort:
+			dbuf_PutString(&display_buffer, 0, 24,
+					(uint8_t*) "Pompowanie za krotkie", &mono5x8, 1);
+			break;
+		default:
+			dbuf_PutString(&display_buffer, 0, 24,
+					(uint8_t*) "Nieznany blad", &mono5x8, 1);
+		}
+		break;
+	case jrGood:
+//		set_backlight(bcGreen);
+		dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_RESULT_GOOD, &sansserif_11pt,
+				1);
+		dbuf_PutString(&display_buffer, 0, HLINE_Y - 8, (uint8_t*)MSG_OKFINISH, &mono5x8,
+				1);
+		break;
+	case jrMonitor:
+		dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_RESULT_MONITOR,
+				&sansserif_11pt, 1);
+		break;
+	case jrNone:
+		break;
+	case jrNotReliable:
+//		set_backlight(bcYellow);
+		dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_RESULT_NOTRELIABLE, &sansserif_11pt,
+				1);
+		dbuf_PutString(&display_buffer, 0, HLINE_Y - 8, (uint8_t*)MSG_OKFINISH, &mono5x8,
+				1);
+		break;
+	}
+
+//	st7565_WriteBuffer(display_buffer.buffer);
+}
+
+
+#define EC_POST_FP_SENSOR		0xA010
+#define EC_POST_RP_SENSOR		0xA011
+#define EC_POST_BATTERY			0xA012
+#define EC_POST_SDCARD			0xA013
+#define EC_POST_PUMP_TEST		0xA014
+#define EC_POST_DIFF_VALVE_TEST	0xA015
+#define EC_POST_FP_SEN_CONN		0xA016
+void stErrorRefreshDisplay(void) {
+	uint8_t _text[20] = { 0 };
+	// unused__ int32_t _pressure;
+
+	clearDisplay();
+	dbuf_Fill(&display_buffer, 0);
+
+	sprintf((char*) _text, MSG_ERROR_SERVICE);
+	dbuf_PutString(&display_buffer, 0, 0, _text, &mono5x8, 1);
+
+	sprintf((char*) _text, MSG_ERROR_CODE);
+	dbuf_PutString(&display_buffer, 0, 18, _text, &mono5x8, 1);
+
+	sprintf((char*) _text, " %04X", EC_POST_DIFF_VALVE_TEST);
+	dbuf_PutString(&display_buffer, 0, 27, _text, &mono5x8, 1);
+//	st7565_WriteBuffer(display_buffer.buffer);
+}
+
+
+uint8_t settime_position = 1;
+struct tm  datetime_tmp = { .tm_mday = 11, .tm_mon = 4, .tm_year = 120, .tm_hour = 8, .tm_min = 1};
+void stSetTimeRefreshDisplay(void){
+	uint8_t _text[20] = { 0 };
+
+	clearDisplay();
+
+	dbuf_PutString(&display_buffer, 0, 0, (uint8_t*)MSG_DATE_TIME, &sansserif_11pt, 1);
+
+	dbuf_PutString(&display_buffer, 0, 18, (uint8_t*)"  /  /    ", &mono5x8, 1);
+	dbuf_PutString(&display_buffer, 0, 27, (uint8_t*)"  :  ", &mono5x8, 1);
+
+	switch(settime_position){
+	case 0: // day
+		dbuf_DrawFillRect(&display_buffer, 0, 17, 12, 9, 1);
+		break;
+	case 1: //month
+		dbuf_DrawFillRect(&display_buffer, 17, 17, 13, 9, 1);
+		break;
+	case 2: //year
+		dbuf_DrawFillRect(&display_buffer, 35, 17, 25, 9, 1);
+		break;
+	case 3: //hour
+		dbuf_DrawFillRect(&display_buffer, 0, 26, 12, 9, 1);
+		break;
+	case 4: //minute
+		dbuf_DrawFillRect(&display_buffer, 17, 26, 12, 9, 1);
+		break;
+	default:
+		break;
+	}
+	
+	sprintf((char*) _text, "%2d", datetime_tmp.tm_mday);
+	dbuf_PutString(&display_buffer, 0, 18, _text, &mono5x8, settime_position == 0 ? 0 : 1);
+
+	sprintf((char*) _text, "%02d", datetime_tmp.tm_mon+1);
+	dbuf_PutString(&display_buffer, 18, 18, _text, &mono5x8, settime_position == 1 ? 0 : 1);
+
+	sprintf((char*) _text, "%04d", datetime_tmp.tm_year+1900);
+	dbuf_PutString(&display_buffer, 36, 18, _text, &mono5x8, settime_position == 2 ? 0 : 1);
+
+	sprintf((char*) _text, "%2d", datetime_tmp.tm_hour);
+	dbuf_PutString(&display_buffer, 0, 27, _text, &mono5x8, settime_position == 3 ? 0 : 1);
+
+	sprintf((char*) _text, "%02d", datetime_tmp.tm_min);
+	dbuf_PutString(&display_buffer, 18, 27, _text, &mono5x8, settime_position == 4 ? 0 : 1);
+
+	//st7565_WriteBuffer(display_buffer.buffer);
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -157,8 +585,19 @@ main (int argc, char *argv[])
     display_buffer.width = 128;
     display_buffer.height = 64;
     display_buffer.buffer = st7565_buffer;
-    dbufCalcBufSize(&display_buffer);
-    dbufInvert(&display_buffer);
+    dbuf_Init(&display_buffer);
+    //dbuf_Invert(&display_buffer);
+
+	stReadyRefreshDisplay();
+	//stRFIDScanRefreshDisplay();
+	//stPumpingRefreshDisplay();
+	//stCreepRefreshDisplay();
+	//stMeasureRefreshDisplay();
+	//stDumpRefreshDisplay();
+	//stMonitorRefreshDisplay();
+	//stHoldRefreshDisplay();
+	//stErrorRefreshDisplay();
+	//stSetTimeRefreshDisplay();
     //dbufFill(&display_buffer, 0);
   
     /*
